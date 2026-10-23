@@ -1,0 +1,13 @@
+# Cloudflare Pages / Netlify 静态头部配置（InfinityFree 不使用本文件）
+# 部署到 Cloudflare Pages 时，把 web/ 作为站点根目录上传。
+
+/sw.js
+  Content-Type: text/javascript
+  Cache-Control: no-cache
+
+/manifest.webmanifest
+  Content-Type: application/manifest+json
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache

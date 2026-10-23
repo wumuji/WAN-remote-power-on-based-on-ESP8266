@@ -1,0 +1,20 @@
+{
+  "name": "wol-remote",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ESP8266 + MQTT + Android WebView / PWA remote Wake-on-LAN",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/sha256.test.mjs tests/core.test.mjs",
+    "test:e2e": "node --test tests/e2e-web.test.mjs",
+    "serve": "python -m http.server 8080 --directory web",
+    "bundle:app": "node tools/bundle_app.mjs android/prebuilt/app.bundle.js"
+  },
+  "devDependencies": {
+    "aedes": "^1.2.0",
+    "esbuild": "^0.28.2",
+    "mqtt": "^5.16.1",
+    "puppeteer-core": "^25.15.0",
+    "ws": "^8.22.0"
+  }
+}

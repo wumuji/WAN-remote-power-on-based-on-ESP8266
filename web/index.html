@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#070b14">
+  <meta name="description" content="用手机远程唤醒家里的电脑：ESP8266 + MQTT + WOL。">
+  <meta name="color-scheme" content="dark">
+  <title>远程开机 · WOL</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="./icons/icon-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="./css/app.css">
+</head>
+<body>
+  <div class="app" id="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2v9"></path>
+            <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>远程开机</h1>
+          <p id="brandSub">ESP8266 · Wake-on-LAN</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <span class="pill off" id="connPill" title="Broker 连接状态">
+          <span class="dot"></span><span id="connPillText">未连接</span>
+        </span>
+        <button class="btn ghost sm hidden" id="installBtn" type="button">安装</button>
+      </div>
+    </header>
+
+    <main>
+      <!-- ============ 首次配置 ============ -->
+      <section class="view hidden" id="setupView">
+        <div class="card hero">
+          <div class="eyebrow">首次使用</div>
+          <h2>创建你的开机设备</h2>
+          <p class="lead">
+            生成一串设备码，把它和家里的 WiFi 一起填入 ESP8266 的配网页面。
+            手机之后只需要打开这个网页。
+          </p>
+
+          <form id="setupForm" autocomplete="off">
+            <label class="field">
+              <span>设备名称</span>
+              <input id="setupName" maxlength="23" placeholder="例如：书房电脑" value="我的电脑">
+            </label>
+
+            <label class="field">
+              <span>电脑 MAC 地址</span>
+              <input id="setupMac" inputmode="text" spellcheck="false"
+                     placeholder="AA:BB:CC:DD:EE:FF，多个用逗号分隔">
+              <small>Windows 上运行 <code>getmac /v</code>，找“物理地址”一列。支持 1–3 个。</small>
+            </label>
+
+            <details class="advanced">
+              <summary>高级：MQTT Broker 设置</summary>
+              <div class="advanced-body">
+                <p class="help">
+                  默认使用公共 EMQX Broker，无需注册。若你自建了 Mosquitto/EMQX，
+                  在这里改成自己的地址、端口和账号。
+                </p>
+                <div class="grid-2">
+                  <label class="field">
+                    <span>Broker 地址</span>
+                    <input id="setupBrokerHost" spellcheck="false" placeholder="broker.emqx.io">
+                  </label>
+                  <label class="field">
+                    <span>MQTT(TLS) 端口</span>
+                    <input id="setupMqttPort" inputmode="numeric" placeholder="8883">
+                  </label>
+                  <label class="field">
+                    <span>WebSocket(TLS) 端口</span>
+                    <input id="setupWssPort" inputmode="numeric" placeholder="8084">
+                  </label>
+                  <label class="field">
+                    <span>WebSocket 路径</span>
+                    <input id="setupPath" spellcheck="false" placeholder="/mqtt">
+                  </label>
+                  <label class="field">
+                    <span>用户名（可选）</span>
+                    <input id="setupUser" autocomplete="off" placeholder="留空即可">
+                  </label>
+                  <label class="field">
+                    <span>密码（可选）</span>
+                    <input id="setupPass" type="password" autocomplete="new-password" placeholder="留空即可">
+                  </label>
+                </div>
+                <button class="btn ghost sm" type="button" id="testBrokerBtn">测试 Broker 连接</button>
+                <span class="inline-status" id="testBrokerStatus"></span>
+              </div>
+            </details>
+
+            <div class="error hidden" id="setupError" role="alert"></div>
+
+            <div class="row">
+              <button class="btn primary" type="submit" id="generateBtn">生成设备码</button>
+            </div>
+          </form>
+
+          <div class="result hidden" id="setupResult">
+            <div class="result-head">
+              <h3>设备码已生成</h3>
+              <span class="badge">请妥善保存</span>
+            </div>
+            <p class="help">
+              设备码同时包含 Broker、Topic 和密钥，等同于这台设备的“密码”。
+              下一步：烧录固件 → 手机连 <code>WOL-xxxx</code> → 粘贴设备码和 WiFi。
+            </p>
+            <textarea class="code-box" id="codeOutput" readonly rows="5" spellcheck="false"></textarea>
+            <div class="row wrap">
+              <button class="btn" type="button" id="copyCodeBtn">复制设备码</button>
+              <button class="btn ghost" type="button" id="downloadCodeBtn">下载设备码</button>
+              <button class="btn ghost" type="button" id="gotoDashboardBtn">进入控制台</button>
+            </div>
+            <ol class="steps">
+              <li>烧录 <code>firmware/bin/wol8266-nodemcuv2-4m.bin</code>（或按文档用 Arduino IDE 上传源码）。</li>
+              <li>手机连上 ESP8266 发出的 <code>WOL-xxxx</code> 热点，打开配网页。</li>
+              <li>填写家里 WiFi，粘贴上面的设备码，保存。</li>
+              <li>手机连回家里的 WiFi，回到本页点“开机”。</li>
+            </ol>
+          </div>
+
+          <details class="advanced" id="importBox">
+            <summary>已有设备码？导入</summary>
+            <div class="advanced-body">
+              <textarea class="code-box" id="importCode" rows="4" spellcheck="false"
+                        placeholder="粘贴 WOL1- 开头的设备码"></textarea>
+              <div class="row">
+                <button class="btn ghost sm" type="button" id="importBtn">导入设备码</button>
+                <button class="btn ghost sm" type="button" id="clearSetupBtn">清除本机配置</button>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <div class="card tips">
+          <h3>开始前检查</h3>
+          <ul>
+            <li>电脑用<strong>网线</strong>连接路由器；WiFi 唤醒通常不可靠。</li>
+            <li>BIOS 里开启 Wake-on-LAN / Power On By PCI-E，关闭 ErP。</li>
+            <li>Windows 网卡高级设置里开启“唤醒魔术包”，关闭快速启动。</li>
+            <li>ESP8266 与电脑在同一个局域网/同一网段。</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ============ 控制台 ============ -->
+      <section class="view hidden" id="dashboardView">
+        <div class="card device-card">
+          <div class="device-head">
+            <div>
+              <div class="eyebrow">目标设备</div>
+              <h2 id="deviceName">我的电脑</h2>
+              <p class="meta" id="deviceMeta">等待设备状态…</p>
+            </div>
+            <span class="pill off" id="deviceState"><span class="dot"></span><span id="deviceStateText">未知</span></span>
+          </div>
+
+          <div class="targets hidden" id="targets" role="group" aria-label="选择要唤醒的电脑"></div>
+
+          <div class="wake-wrap">
+            <button class="wake" id="wakeBtn" type="button" aria-label="发送开机命令">
+              <span class="wake-ring" aria-hidden="true"></span>
+              <span class="wake-inner">
+                <span class="wake-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                       stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2v9"></path>
+                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                  </svg>
+                </span>
+                <span class="wake-label" id="wakeLabel">开机</span>
+              </span>
+            </button>
+          </div>
+          <p class="hint" id="wakeHint">正在连接 Broker…</p>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h3>最近事件</h3>
+            <button class="btn ghost xs" type="button" id="clearLogBtn">清空</button>
+          </div>
+          <ul class="log-list" id="logList"></ul>
+          <p class="empty hidden" id="logEmpty">还没有记录。点上面的按钮试试。</p>
+        </div>
+
+        <div class="card">
+          <details>
+            <summary>诊断信息</summary>
+            <dl class="diag" id="diagList">
+              <dt>Broker</dt><dd id="diagBroker">—</dd>
+              <dt>Topic</dt><dd id="diagTopic">—</dd>
+              <dt>客户端</dt><dd id="diagClient">—</dd>
+              <dt>固件</dt><dd id="diagFw">—</dd>
+              <dt>设备 IP</dt><dd id="diagIp">—</dd>
+              <dt>信号</dt><dd id="diagRssi">—</dd>
+              <dt>设备时间</dt><dd id="diagTime">—</dd>
+              <dt>最后状态</dt><dd id="diagSeen">—</dd>
+            </dl>
+            <div class="row">
+              <button class="btn ghost sm" type="button" id="reconnectBtn">重新连接</button>
+            </div>
+          </details>
+
+          <details>
+            <summary>设置与备份</summary>
+            <div class="advanced-body">
+              <p class="help">设备码是唯一凭证。换手机或清浏览器数据前，先复制/下载备份。</p>
+              <textarea class="code-box" id="settingsCode" readonly rows="4" spellcheck="false"></textarea>
+              <div class="row wrap">
+                <button class="btn ghost sm" type="button" id="settingsCopyBtn">复制</button>
+                <button class="btn ghost sm" type="button" id="settingsDownloadBtn">下载备份</button>
+                <button class="btn ghost sm" type="button" id="reconfigureBtn">重新配置</button>
+                <button class="btn danger sm" type="button" id="clearConfigBtn">清除本机配置</button>
+              </div>
+              <p class="help hidden" id="httpNote">
+                当前不是 HTTPS，网页仍可使用，但无法安装到桌面/离线缓存。建议在 InfinityFree 开启免费 SSL。
+              </p>
+            </div>
+          </details>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>ESP8266 · MQTT · WOL</span>
+      <span id="versionText">v1.0.0</span>
+    </footer>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="./vendor/mqtt.min.js"></script>
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
