@@ -1,4 +1,4 @@
-# 远程开机（ESP8266 + MQTT + 安卓 App / PWA）
+# 远程开机（ESP8266 + MQTT +PWA）
 
 手机点一下 → 公共 MQTT Broker → 家里的 ESP8266 → 局域网 WOL 魔术包 → 电脑开机。
 不需要公网 IP、端口映射或 PHP。
@@ -12,15 +12,13 @@
 
 | 路径 | 内容 |
 | --- | --- |
-| `dist/wol-remote-1.0.3.apk` | 已签名的安卓安装包 |
-| `android/` | 安卓源码、构建脚本、构建说明（见 [android/README.md](android/README.md)） |
 | `web/` | 网页 PWA 源文件 |
 | `firmware/wol8266/` | ESP8266 Arduino 源码 |
 | `firmware/bin/` | 预编译 ESP8266 固件 |
 | `tools/` | 固件构建、协议测试、局域网 WOL 测试、图标生成 |
 | `tests/` | 网页协议/浏览器端到端测试 |
 
-## 安卓 App
+## 安卓 App (已弃置)
 
 1. 把 `dist/wol-remote-1.0.3.apk` 传到手机，允许“安装未知应用”，安装。装过旧版（打开 not found）的，直接覆盖安装 1.0.3（versionCode 4，同签名），不用先卸载。
 2. 如果之前已经在网页上配好 ESP：在旧网页 **设置与备份** 里复制设备码。
